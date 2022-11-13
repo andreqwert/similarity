@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 def build_head(head_type,
                embedding_size,
@@ -120,7 +121,7 @@ class ArcMarginProduct(nn.Module):
         self.s = s
         self.m = m
         self.ls_eps = ls_eps  # label smoothing
-        self.weight = nn.Parameter(torch.FloatTensor(out_features, in_features))
+        self.weight = nn.Parameter(torch.cuda.FloatTensor(out_features, in_features))
         nn.init.xavier_uniform_(self.weight)
 
         self.easy_margin = easy_margin
@@ -130,6 +131,7 @@ class ArcMarginProduct(nn.Module):
         self.mm = math.sin(math.pi - m) * m
         
     def forward(self, input, label):
+        
         cosine = F.linear(F.normalize(input), F.normalize(self.weight))
         sine = torch.sqrt(1.0 - torch.pow(cosine, 2))
         phi = cosine * self.cos_m - sine * self.sin_m
@@ -138,7 +140,7 @@ class ArcMarginProduct(nn.Module):
         else:
             phi = torch.where(cosine > self.th, phi, cosine - self.mm)
 
-        one_hot = torch.zeros(cosine.size())
+        one_hot = torch.zeros(cosine.size()).to(device)
         one_hot.scatter_(1, label.view(-1, 1).long(), 1)
         if self.ls_eps > 0:
             one_hot = (1 - self.ls_eps) * one_hot + self.ls_eps / self.out_features
@@ -146,5 +148,3 @@ class ArcMarginProduct(nn.Module):
         output *= self.s
 
         return output    
-
-
